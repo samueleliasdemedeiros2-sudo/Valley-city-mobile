@@ -1,0 +1,57 @@
+name: Android Debug APK
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and native build tools
+        run: |
+          sdkmanager \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "ndk;26.2.11394342" \
+            "cmake;3.22.1"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build debug APK with native 3D engine
+        run: ./gradlew --no-daemon :app:assembleDebug
+
+      - name: Verify APK contains the 3D engine
+        run: |
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            unzip -Z1 "$apk" | grep -Fx "lib/$abi/libvalleycity3d.so"
+          done
+          cp "$apk" app/build/outputs/apk/debug/ValleyCity-Mobile-APK.apk
+
+      - name: Upload ValleyCity Mobile APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ValleyCity-Mobile-APK
+          path: app/build/outputs/apk/debug/ValleyCity-Mobile-APK.apk
+          if-no-files-found: error
+          retention-days: 14
